@@ -118,3 +118,38 @@ func TestPathTraversalIsRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestWriteInsertsLastUpdatedWhenAbsent(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t)
+
+	doc := "---\ntitle: Spec\n---\n\nbody\n"
+	if err := store.Write("domain/spec.md", doc); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	got, err := store.Read("domain/spec.md")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if !strings.Contains(got, "last_updated: ") {
+		t.Fatal("Write did not insert a last_updated field into frontmatter that lacked one")
+	}
+}
+
+func TestWriteLeavesUnterminatedFrontmatterUnchanged(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t)
+
+	// An opening --- with no closing --- is not valid frontmatter; leave it be.
+	doc := "---\ntitle: Spec\nbody with no closing fence\n"
+	if err := store.Write("domain/broken.md", doc); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	got, err := store.Read("domain/broken.md")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got != doc {
+		t.Fatalf("Write altered content that had unterminated frontmatter: got %q", got)
+	}
+}

@@ -62,20 +62,20 @@ func run(episodicDB, canonicalDir, ollamaEndpoint, ollamaModel string) error {
 
 	episodicStore, err := episodic.Open(episodicDB)
 	if err != nil {
-		return err
+		return fmt.Errorf("opening the episodic store: %w", err)
 	}
 	defer func() { _ = episodicStore.Close() }()
 
 	canonicalStore, err := canonical.Open(canonicalDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("opening the canonical store: %w", err)
 	}
 
 	embedder := embed.NewClient(ollamaEndpoint, ollamaModel)
 
 	server, err := memoryserver.New(episodicStore, canonicalStore, embedder)
 	if err != nil {
-		return err
+		return fmt.Errorf("wiring the memory server: %w", err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

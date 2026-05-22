@@ -52,6 +52,8 @@ func Open(path string) (*Store, error) {
 // init enables foreign keys and applies the schema when the database is older
 // than schemaVersion. The applied version is tracked in user_version.
 func (s *Store) init() error {
+	// init runs once, synchronously, inside Open — a process-startup boundary
+	// with no caller context to inherit, so a fresh background context is right.
 	ctx := context.Background()
 	if _, err := s.db.ExecContext(ctx, `PRAGMA foreign_keys = ON;`); err != nil {
 		return fmt.Errorf("enabling foreign keys: %w", err)
@@ -101,9 +103,11 @@ func (s *Store) Stats(ctx context.Context) (Stats, error) {
 	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM runs;`).Scan(&out.Runs); err != nil {
 		return Stats{}, fmt.Errorf("counting runs: %w", err)
 	}
-	if info, err := os.Stat(s.path); err == nil {
-		out.SizeBytes = info.Size()
+	info, err := os.Stat(s.path)
+	if err != nil {
+		return Stats{}, fmt.Errorf("measuring episodic database %s: %w", s.path, err)
 	}
+	out.SizeBytes = info.Size()
 	return out, nil
 }
 

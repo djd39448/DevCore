@@ -172,3 +172,48 @@ func TestStatsCountsWrites(t *testing.T) {
 		t.Fatalf("stats reported %d events, want 1", statsOut.Events)
 	}
 }
+
+func TestTaskRecordAndListRuns(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t)
+	ctx := context.Background()
+
+	if _, _, err := s.handleTask(ctx, nil, TaskInput{
+		Op: "record_run", RunID: "run-1", Agent: "verifier", Profile: "local",
+	}); err != nil {
+		t.Fatalf("handleTask record_run: %v", err)
+	}
+
+	_, out, err := s.handleTask(ctx, nil, TaskInput{Op: "list_runs"})
+	if err != nil {
+		t.Fatalf("handleTask list_runs: %v", err)
+	}
+	if len(out.Runs) != 1 || out.Runs[0].ID != "run-1" {
+		t.Fatalf("list_runs = %+v, want one run-1", out.Runs)
+	}
+}
+
+func TestTaskRejectsInvalidStatus(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t)
+
+	_, _, err := s.handleTask(context.Background(), nil, TaskInput{
+		Op: "list_tasks", Status: "actvie", // a typo of "active"
+	})
+	if err == nil {
+		t.Fatal("handleTask list_tasks accepted an invalid status, want an error")
+	}
+}
+
+func TestHandlersRejectEmptyRequiredFields(t *testing.T) {
+	t.Parallel()
+	s := newTestServer(t)
+	ctx := context.Background()
+
+	if _, _, err := s.handleRecall(ctx, nil, RecallInput{Query: ""}); err == nil {
+		t.Error("handleRecall accepted an empty query, want an error")
+	}
+	if _, _, err := s.handleCanonicalWrite(ctx, nil, CanonicalWriteInput{Path: "", Content: "x"}); err == nil {
+		t.Error("handleCanonicalWrite accepted an empty path, want an error")
+	}
+}

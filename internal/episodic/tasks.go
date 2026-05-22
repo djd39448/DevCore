@@ -46,7 +46,8 @@ const taskColumns = `id, parent_id, title, spec_ref, track, status, assigned_age
 const runColumns = `id, task_id, agent, model, profile, started_at, ended_at, status, summary, tokens_in, tokens_out`
 
 // UpsertTask inserts t, or updates the existing row when a task with the same
-// ID already exists. The caller supplies CreatedAt and UpdatedAt.
+// ID already exists. The caller supplies CreatedAt and UpdatedAt; on an update
+// the existing row keeps its original created_at — only updated_at moves.
 func (s *Store) UpsertTask(ctx context.Context, t Task) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO tasks(`+taskColumns+`)

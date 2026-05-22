@@ -1,6 +1,7 @@
 // Tests for the episodic package. Each test opens a fresh SQLite database in a
-// temp directory, so the suite is isolated, offline, and fast. sqlite-vec runs
-// in-process via the embedded WASM build, so vector search is exercised for real.
+// temp directory, so the suite is isolated, offline, and fast. Recall is
+// computed in Go over the events table — no extension, no WASM — so the tests
+// exercise the real search path with nothing mocked.
 package episodic_test
 
 import (
@@ -231,6 +232,33 @@ func TestStatsCountsRows(t *testing.T) {
 	}
 	if stats.SizeBytes <= 0 {
 		t.Fatalf("Stats.SizeBytes = %d, want a positive size", stats.SizeBytes)
+	}
+}
+
+func TestRecallOnEmptyStore(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t)
+
+	hits, err := store.RecallEvents(context.Background(), "anything", vector(0.5), 5)
+	if err != nil {
+		t.Fatalf("RecallEvents on an empty store returned an error: %v", err)
+	}
+	if len(hits) != 0 {
+		t.Fatalf("RecallEvents on an empty store returned %d hits, want 0", len(hits))
+	}
+}
+
+func TestRecallLimitExceedsEventCount(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t)
+	logOrFail(t, store, episodic.Event{TS: "t", Type: "note", Summary: "only event"}, vector(0.5))
+
+	hits, err := store.RecallEvents(context.Background(), "only", vector(0.5), 50)
+	if err != nil {
+		t.Fatalf("RecallEvents: %v", err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("got %d hits with limit 50 over a 1-event store, want 1", len(hits))
 	}
 }
 

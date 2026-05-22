@@ -17,6 +17,9 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 
+# Desktop app build output (assembled by desktop/build.sh).
+desktop/build/
+
 # Go build output.
 /bin/
 *.test

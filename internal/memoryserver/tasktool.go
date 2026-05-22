@@ -51,6 +51,30 @@ type TaskOutput struct {
 	Runs  []episodic.Run  `json:"runs,omitempty"`
 }
 
+// Valid values for the closed-set fields of tasks and runs. memory_task checks
+// inputs against these so a typo fails loudly here, rather than silently
+// matching nothing on a list or storing a bad value on a write.
+var (
+	validTaskStatuses = []string{"pending", "active", "blocked", "review", "done", "abandoned"}
+	validTaskTracks   = []string{"backend", "data", "ios"}
+	validRunProfiles  = []string{"api", "local"}
+	validRunStatuses  = []string{"ok", "error", "aborted"}
+)
+
+// checkEnum returns an error if value is non-empty and not one of allowed. An
+// empty value is always accepted — callers treat "" as "unset" or "no filter".
+func checkEnum(field, value string, allowed []string) error {
+	if value == "" {
+		return nil
+	}
+	for _, candidate := range allowed {
+		if value == candidate {
+			return nil
+		}
+	}
+	return fmt.Errorf("memory_task: %s %q is not valid; expected one of %v", field, value, allowed)
+}
+
 // handleTask dispatches to the operation named by in.Op.
 func (s *Server) handleTask(
 	ctx context.Context, _ *mcp.CallToolRequest, in TaskInput,
@@ -79,6 +103,12 @@ func (s *Server) handleTask(
 func (s *Server) upsertTask(ctx context.Context, in TaskInput) (*mcp.CallToolResult, TaskOutput, error) {
 	if in.ID == "" || in.Title == "" {
 		return nil, TaskOutput{}, fmt.Errorf("memory_task upsert_task requires id and title")
+	}
+	if err := checkEnum("status", in.Status, validTaskStatuses); err != nil {
+		return nil, TaskOutput{}, err
+	}
+	if err := checkEnum("track", in.Track, validTaskTracks); err != nil {
+		return nil, TaskOutput{}, err
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	task := episodic.Task{
@@ -115,6 +145,9 @@ func (s *Server) getTask(ctx context.Context, in TaskInput) (*mcp.CallToolResult
 
 // listTasks returns all tasks, optionally filtered by Status.
 func (s *Server) listTasks(ctx context.Context, in TaskInput) (*mcp.CallToolResult, TaskOutput, error) {
+	if err := checkEnum("status", in.Status, validTaskStatuses); err != nil {
+		return nil, TaskOutput{}, err
+	}
 	tasks, err := s.episodic.ListTasks(ctx, in.Status)
 	if err != nil {
 		return nil, TaskOutput{}, fmt.Errorf("listing tasks: %w", err)
@@ -126,6 +159,12 @@ func (s *Server) listTasks(ctx context.Context, in TaskInput) (*mcp.CallToolResu
 func (s *Server) recordRun(ctx context.Context, in TaskInput) (*mcp.CallToolResult, TaskOutput, error) {
 	if in.RunID == "" || in.Agent == "" {
 		return nil, TaskOutput{}, fmt.Errorf("memory_task record_run requires run_id and agent")
+	}
+	if err := checkEnum("profile", in.Profile, validRunProfiles); err != nil {
+		return nil, TaskOutput{}, err
+	}
+	if err := checkEnum("run_status", in.RunStatus, validRunStatuses); err != nil {
+		return nil, TaskOutput{}, err
 	}
 	started := in.StartedAt
 	if started == "" {
