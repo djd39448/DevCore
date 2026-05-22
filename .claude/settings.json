@@ -11,5 +11,17 @@
       "Bash(golangci-lint:*)"
     ],
     "deny": []
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'DevCore — current phase (from build_log.md):'; grep -E '^## .*Phase' build_log.md 2>/dev/null | tail -1"
+          }
+        ]
+      }
+    ]
   }
 }

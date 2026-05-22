@@ -1,0 +1,2 @@
+# SwiftLint configuration for DevCore's desktop shell (CODING_STANDARDS.md dc-03).
+# The default rule set is used as-is — the shell is small and needs no overrides.

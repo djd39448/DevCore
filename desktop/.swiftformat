@@ -1,0 +1,3 @@
+# SwiftFormat configuration for DevCore's desktop shell (CODING_STANDARDS.md dc-03).
+# The default rule set is used; only the Swift version is pinned.
+--swiftversion 6.3

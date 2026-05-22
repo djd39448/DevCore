@@ -13,6 +13,41 @@ Newest first. Each entry: date, what changed, and why.
 
 ---
 
+## 2026-05-22 — Desktop app added; built as a Path B native shell
+
+**Changed:** DevCore gains a desktop app — a personal native-macOS control
+surface (buildspec §4.8, Phase 6). Built as **Path B**: a native macOS shell
+(an AppKit window + a `WKWebView`) hosting the design prototype, rather than a
+full SwiftUI port.
+**Why:** the user wants a Claude-Code-desktop-like UX, for personal use. A
+complete interactive prototype arrived from Claude Design; wrapping it in a
+native shell delivers a working app immediately, with effort going to wiring it
+to the live engine rather than re-drawing CSS. A full SwiftUI nativization is a
+later pass (§10). The webview-shell shortcut applies **only** to DevCore's own
+desktop tool — every application DevCore *builds*, sous-chef included, is
+genuine native SwiftUI.
+
+## 2026-05-22 — `devcore doctor` implemented as `scripts/doctor.sh`
+
+**Changed:** buildspec §9 Phase 2 calls for `devcore doctor --test-local`. The
+`devcore` engine binary is a Phase 4 deliverable, so the Phase 2 health check is
+implemented as `scripts/doctor.sh` instead.
+**Why:** buildspec §5 already designates `scripts/` for "setup, doctor, backup
+helpers." A shell health check needs no Go binary and can run before the engine
+exists. When the engine arrives in Phase 4, a `devcore doctor` subcommand may
+wrap or replace it. buildspec §9 updated.
+
+## 2026-05-22 — `Stop` hook dropped; agents log their own runs
+
+**Changed:** the `Stop` logging hook — moved from Phase 1 to Phase 2 earlier
+today — is now dropped entirely rather than implemented. Only the `SessionStart`
+hook ships in Phase 2.
+**Why:** a Claude Code `Stop` hook is a shell command, and DevCore's episodic
+memory sits behind an MCP server a shell hook cannot call. Run-completion
+logging is already the agents' own job — every agent prompt mandates it via the
+`memory_task` and `memory_log` tools. A shell `Stop` hook would be redundant and
+unable to reach the store. buildspec §4.7 and §9 updated.
+
 ## 2026-05-22 — `Stop` logging hook moved from Phase 1 to Phase 2
 
 **Changed:** buildspec §9 listed a `Stop` logging hook among Phase 1's

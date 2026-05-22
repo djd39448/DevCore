@@ -283,8 +283,11 @@ for storage; recall computed in Go). Single binary — P1.
 ### 4.7 Hooks & Slash Commands
 
 **Hooks** (`.claude/settings.json`) — kept minimal:
-- `SessionStart` — inject the `MEMORY.md` index pointer into context.
-- `Stop` — log a run-completion event to episodic memory.
+- `SessionStart` — surface DevCore's current build phase (from `build_log.md`).
+
+Run-completion is logged by the agents themselves, via the `memory_task` and
+`memory_log` tools — a shell `Stop` hook cannot reach the MCP-based episodic
+store, so none is used (see change_log, 2026-05-22).
 
 **Slash commands** (`.claude/commands/`):
 - `/devcore-plan <goal>` — Conductor turns a goal into a task tree.
@@ -294,6 +297,19 @@ for storage; recall computed in Go). Single binary — P1.
 - `/devcore-standards-sync` — refresh the TrustCore base reference from Pinecone
   (the DevCore standard itself is version-controlled in-repo).
 - `/devcore-status` — show task/run state and cost.
+
+### 4.8 Desktop App
+
+DevCore's personal control surface — a native macOS app. It is **not** the
+primary control path (the slash commands and, later, the engine CLI are); it is
+a calm, always-there window onto the running harness — chat with the Conductor,
+the live agent loop, the task tree, gates, and the memory browser.
+
+Built as **Path B** (see §9, Phase 6): a small native shell — an AppKit window
+hosting the design prototype in a `WKWebView`, the assets served through a
+custom URL scheme. This delivers a working app fast; a full SwiftUI
+nativization is a later pass (§10). The webview shell is for DevCore's *own*
+tool only — every application DevCore *builds* is genuine native code.
 
 ---
 
@@ -350,6 +366,11 @@ DevCore/
     engine/                     ← orchestration loop            (Phase 4)
     agents/                     ← agent process runner          (Phase 4)
   scripts/                      ← setup, doctor, backup helpers
+
+  desktop/                      ← the DevCore desktop app — Path B native shell
+    Shell/                      ← Swift: the macOS window + WKWebView shell
+    web/                        ← the design prototype (HTML/CSS/JSX), served as-is
+    build.sh                    ← compiles the shell, assembles DevCore.app
 ```
 
 ---
@@ -577,11 +598,13 @@ before Phase 0 begins.
   and by semantic similarity.
 
 ### Phase 2 — Agents & local wiring
-- **Deliverables:** the six agent prompt files; subagent definitions; the six slash
-  commands; the `SessionStart` and `Stop` memory hooks; `/devcore-standards-sync`
-  pulling Pinecone → `conventions/`; `claude-code-router` installed;
-  `devcore doctor --test-local` proving the `claude → proxy → Ollama` path.
-- **Exit:** all agents callable; `devcore doctor` is green including the local path.
+- **Deliverables:** the six agent prompt files (+ Builder track packs); subagent
+  definitions; the six slash commands; the `SessionStart` hook;
+  `/devcore-standards-sync` pulling Pinecone → `conventions/`; `claude-code-router`
+  installed; `scripts/doctor.sh --test-local` proving the
+  `claude → proxy → Ollama` path.
+- **Exit:** all agents callable; `scripts/doctor.sh` is green including the local
+  path.
 
 ### Phase 3 — Thin orchestration + first real work
 - **Deliverables:** the Conductor loop with manual gates. **DevCore does real
@@ -601,6 +624,12 @@ before Phase 0 begins.
   feedback/iteration pipeline (§10) against the actual Studio spec.
 - **Exit:** DevCore runs end-to-end with no cloud model calls.
 
+### Phase 6 — Desktop app
+- **Deliverables:** the DevCore desktop app (§4.8) — the native macOS shell
+  hosting the design prototype, then its views wired to the live engine and
+  `devcore-memory`. Independent of Phases 3–5; can be built in parallel.
+- **Exit:** the app launches, renders, and reflects real DevCore state.
+
 ---
 
 ## 10. Open Decisions & Deferred Items
@@ -609,6 +638,7 @@ before Phase 0 begins.
 |------|--------|-------------|
 | Feedback-driven training/iteration pipeline (the TrustCore-DPO analogue) | **Deferred** | After the Mac Studio spec is known. |
 | Mac Studio model selection (which local model per agent) | Open | When Studio hardware is specced. |
+| Desktop app: full SwiftUI nativization (currently a WKWebView shell) | Deferred | After the shell's views are wired to the live engine and the UX is proven. |
 | Whether the Phase 4 Go Engine is needed, or the thin orchestration suffices | Open | Decide after Phase 3 — let the first real workload tell us. |
 | Voice features in the sous-chef port (keep / drop) | Open | During the behavior-spec gate. |
 
