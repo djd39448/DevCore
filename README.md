@@ -16,7 +16,8 @@ Workload #1 is porting a web app to a native iOS app.
 
 ## Status
 
-**Phase 0 — Scaffold.** See `buildspec.md` §9 for the full phase plan.
+**Phase 1 — Memory layer** (in progress). See `buildspec.md` §9 for the full
+phase plan and `build_log.md` for current progress.
 
 ## Setup
 

@@ -6,6 +6,10 @@
       "env": {
         "PINECONE_API_KEY": "${PINECONE_API_KEY}"
       }
+    },
+    "devcore-memory": {
+      "command": "go",
+      "args": ["run", "./cmd/devcore-memory"]
     }
   }
 }

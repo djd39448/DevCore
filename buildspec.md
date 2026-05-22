@@ -87,7 +87,7 @@ DevCore is the leaner, portable descendant, not the same system.
                        │   devcore-memory  (MCP)  │
                        ├──────────────────────────┤
                        │ Tier 1: canonical files  │  git-versioned truth
-                       │ Tier 2: episodic SQLite  │  FTS5 + vector recall
+                       │ Tier 2: episodic SQLite  │  keyword + vector recall
                        └──────────────────────────┘
 
   Reference (read-only):  pinecone MCP  →  coding standards
@@ -192,9 +192,12 @@ by Claude Code with zero glue.
 The append-only record of what agents *did* — runs, decisions, corrections,
 learnings — plus the operational task state. One file: `.devcore/state/episodic.sqlite`.
 
-- **FTS5** full-text search — built into SQLite, zero extra dependency.
-- **sqlite-vec** vector search — loaded as an extension. Both wired from the start.
-- Embeddings produced **locally** by `nomic-embed-text` on Ollama (768-dim).
+- Three plain SQLite tables on `modernc.org/sqlite` (pure Go — no CGO, no WASM).
+- **Keyword and semantic recall are computed in Go** over the event log — token
+  overlap for keyword, brute-force vector distance for semantic, fused with
+  reciprocal rank fusion. Correct and fast at DevCore's project scale.
+- Embeddings produced **locally** by `nomic-embed-text` on Ollama (768-dim),
+  stored as a BLOB column on each event.
 
 Schema in §6.1.
 
@@ -266,7 +269,7 @@ without guessing.
 | *(workload MCPs)* | as needed | e.g. Supabase / simulator tooling for the sous-chef workload. |
 
 **`devcore-memory` tools:**
-- `memory_recall(query, scope?, limit?)` — hybrid FTS5 + vector search across
+- `memory_recall(query, scope?, limit?)` — hybrid keyword + vector recall across
   episodic events and (optionally) canonical docs.
 - `memory_log(type, agent, summary, detail?, refs?)` — append an episodic event.
 - `memory_canonical_read(path?)` — structured read of Tier 1.
@@ -274,8 +277,8 @@ without guessing.
 - `memory_task(op, …)` — create/update/query task & run state.
 - `memory_stats()` — counts, sizes, staleness flags.
 
-The memory MCP is a small Go program (official `go-sdk` for MCP; `go-sqlite3` with
-the `sqlite-vec` extension loaded; FTS5 is built into SQLite). Single binary — P1.
+The memory MCP is a small Go program (official `go-sdk` for MCP; `modernc.org/sqlite`
+for storage; recall computed in Go). Single binary — P1.
 
 ### 4.7 Hooks & Slash Commands
 
@@ -296,8 +299,9 @@ the `sqlite-vec` extension loaded; FTS5 is built into SQLite). Single binary —
 
 ## 5. Repository Layout
 
-Target layout. Go directories (`cmd/`, `internal/`) arrive in Phase 4; everything
-else exists from Phase 0–2.
+Target layout. The memory-server Go packages (`cmd/devcore-memory`, and
+`internal/embed|episodic|canonical|memoryserver`) arrive in Phase 1; the Engine
+(`cmd/devcore`, `internal/engine`, `internal/agents`) arrives in Phase 4.
 
 ```
 DevCore/
@@ -308,7 +312,10 @@ DevCore/
   change_log.md                 ← decision & direction-change record
   devcore.config.yaml           ← the one config file (§6.3)
   CLAUDE.md                     ← thin: pointers + memory index only
-  .gitignore                    ← ignores .devcore/state/
+  .gitignore                    ← ignores .devcore/state/, secrets, build cruft
+  .mcp.json                     ← MCP server registration (pinecone; +devcore-memory)
+  .golangci.yml                 ← lint config — the dc-02 linter set
+  .env.example                  ← documents the required environment variables
 
   .claude/
     settings.json               ← hooks, permissions, MCP registration
@@ -332,14 +339,16 @@ DevCore/
       episodic.sqlite
     tasks/                      ← human-authored task/workload specs
 
-  mcp/
-    devcore-memory/             ← Go: the memory MCP server
-
-  cmd/devcore/                  ← Go: the Engine CLI            (Phase 4)
+  cmd/
+    devcore-memory/             ← Go: the memory MCP server     (Phase 1)
+    devcore/                    ← Go: the Engine CLI            (Phase 4)
   internal/
+    embed/                      ← Ollama embeddings client      (Phase 1)
+    episodic/                   ← Tier-2 SQLite store           (Phase 1)
+    canonical/                  ← Tier-1 file store             (Phase 1)
+    memoryserver/               ← memory MCP server + tools     (Phase 1)
     engine/                     ← orchestration loop            (Phase 4)
     agents/                     ← agent process runner          (Phase 4)
-    memory/                     ← shared memory package         (Phase 4)
   scripts/                      ← setup, doctor, backup helpers
 ```
 
@@ -389,21 +398,17 @@ CREATE TABLE events (
   type      TEXT NOT NULL,                  -- decision|action|correction|learning|error|note
   summary   TEXT NOT NULL,
   detail    TEXT,
-  refs      TEXT                            -- JSON array of file/commit refs
+  refs      TEXT,                           -- JSON array of file/commit refs
+  embedding BLOB NOT NULL                   -- 768 float32 values, little-endian
 );
 
--- Keyword recall (built-in)
-CREATE VIRTUAL TABLE events_fts USING fts5(
-  summary, detail, content='events', content_rowid='id'
-);
-
--- Semantic recall (sqlite-vec extension; 768-dim = nomic-embed-text)
-CREATE VIRTUAL TABLE events_vec USING vec0(
-  event_id INTEGER, embedding FLOAT[768]
-);
+CREATE INDEX idx_events_task ON events(task_id);
+CREATE INDEX idx_runs_task  ON runs(task_id);
 ```
 
-`memory_recall` runs FTS5 and vector search, merges and reranks the hits.
+`memory_recall` loads the event log and ranks it two ways in Go — keyword token
+overlap and brute-force vector distance — then fuses the two with reciprocal
+rank fusion. No SQLite extensions are used (see change_log, 2026-05-22).
 
 ### 6.2 Canonical memory file schema (Tier 1)
 
@@ -560,22 +565,22 @@ before Phase 0 begins.
 
 ### Phase 0 — Scaffold
 - **Deliverables:** repo skeleton (§5), `devcore.config.yaml`, thin `CLAUDE.md`,
-  `.gitignore`, `.claude/settings.json` with `pinecone` + `devcore-memory`
-  registered.
-- **Exit:** `claude` runs in the DevCore project; both MCP servers connect.
+  `.gitignore`, `.claude/settings.json` (permissions), and `.mcp.json`
+  registering the `pinecone` MCP.
+- **Exit:** `claude` runs in the DevCore project; the `pinecone` MCP connects.
 
 ### Phase 1 — Memory layer
-- **Deliverables:** `devcore-memory` MCP (Go) — SQLite schema + migrations, FTS5 +
-  sqlite-vec, Ollama embeddings, all six tools. Tier 1 directory tree + seeded
-  `MEMORY.md`. The `Stop` logging hook.
+- **Deliverables:** `devcore-memory` MCP (Go) — SQLite schema (modernc.org/sqlite),
+  in-Go keyword + semantic recall, Ollama embeddings, all six tools, registered
+  in `.mcp.json`. Tier 1 directory tree + seeded `MEMORY.md`.
 - **Exit:** an agent can `memory_log` an event and `memory_recall` it by keyword
   and by semantic similarity.
 
 ### Phase 2 — Agents & local wiring
 - **Deliverables:** the six agent prompt files; subagent definitions; the six slash
-  commands; `/devcore-standards-sync` pulling Pinecone → `conventions/`;
-  `claude-code-router` installed; `devcore doctor --test-local` proving the
-  `claude → proxy → Ollama` path.
+  commands; the `SessionStart` and `Stop` memory hooks; `/devcore-standards-sync`
+  pulling Pinecone → `conventions/`; `claude-code-router` installed;
+  `devcore doctor --test-local` proving the `claude → proxy → Ollama` path.
 - **Exit:** all agents callable; `devcore doctor` is green including the local path.
 
 ### Phase 3 — Thin orchestration + first real work
@@ -626,8 +631,10 @@ before Phase 0 begins.
   relations an append-only event log does not need. If graph-style recall is ever
   required, the lean move is an adjacency table in the existing SQLite file, not
   a new dependency.
-- **sqlite-vec + FTS5:** semantic recall for "past behaviors," keyword recall as
-  the can't-fail complement — both in-process, no extra service.
+- **modernc.org/sqlite, recall in Go:** keyword and semantic recall are computed
+  in Go over the event log — no SQLite extensions, no CGO, no WASM. sqlite-vec's
+  Go bindings proved broken against current `ncruces` (see change_log); in-Go
+  brute-force recall is correct and fast at DevCore's project scale.
 - **`nomic-embed-text` on Ollama:** small, fast on the M4, fully local — memory
   never needs the network. (Not matched to Pinecone's `e5-large`: DevCore's memory
   is independent of the Pinecone standards reference.)

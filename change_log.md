@@ -13,6 +13,39 @@ Newest first. Each entry: date, what changed, and why.
 
 ---
 
+## 2026-05-22 — `Stop` logging hook moved from Phase 1 to Phase 2
+
+**Changed:** buildspec §9 listed a `Stop` logging hook among Phase 1's
+deliverables. Moved to Phase 2.
+**Why:** the hook's job is to log agent-run completion into episodic memory, but
+Phase 1 has no agent runs to log — the orchestration that produces runs arrives
+later. The hook belongs with the agent and hook wiring in Phase 2. buildspec §9
+updated.
+
+## 2026-05-22 — Episodic store: dropped sqlite-vec and the FTS5 virtual table
+
+**Changed:** buildspec §6.1 specified the episodic store with FTS5 and sqlite-vec
+virtual tables. Phase 1 implements it instead as three plain SQLite tables on
+`modernc.org/sqlite` (pure Go — no CGO, no WASM); embeddings are stored in a BLOB
+column and keyword + semantic recall are computed in Go.
+**Why:** the `sqlite-vec` Go bindings are broken against current `ncruces`. The
+stable binding (v0.1.6) calls `sqlite3.Binary`, which `ncruces` v0.34 removed;
+the ancient `ncruces` it pins (v0.17.1) cannot run the binding's WASM (atomics
+disabled). Pinning alpha/ancient versions to chase a working pair would itself
+break dc-02 (current, minimal dependencies). In-Go brute-force recall is correct
+and fast at DevCore's project scale (thousands of events) — revisit with a real
+vector index only if the event log ever reaches millions of rows. buildspec
+§4.3, §6.1, and §11 updated to match.
+
+## 2026-05-22 — Memory server placed under cmd/ and internal/, not mcp/
+
+**Changed:** buildspec §5 placed the memory MCP server under `mcp/devcore-memory/`.
+Implemented instead as `cmd/devcore-memory/` (the binary) plus `internal/`
+packages.
+**Why:** dc-02 is explicit that executables live in `cmd/<binary>/` and
+non-public code in `internal/`. An MCP server is an executable. Following dc-02
+keeps every DevCore binary under one convention. buildspec §5 updated.
+
 ## 2026-05-22 — MCP registration moved to `.mcp.json`
 
 **Changed:** buildspec §9 described Phase 0 MCP registration as living in

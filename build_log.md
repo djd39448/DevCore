@@ -35,6 +35,31 @@ layer, and the phased build plan. First workload chosen: porting `sous-chef-ai`
 - Status: complete. The `devcore-memory` MCP is deferred to Phase 1 — that
   server does not exist yet.
 
-## Next · Phase 1 — the devcore-memory MCP server
+## 2026-05-22 · Phase 1 — Memory layer ✅
 
-Go: SQLite schema, FTS5 + sqlite-vec, Ollama embeddings, the six memory tools.
+Toolchain installed: Go 1.26.3, golangci-lint 2.12.2, gofumpt; `nomic-embed-text`
+pulled. Go module initialised; `.golangci.yml` added with the dc-02 linter set.
+
+Built, `gofumpt`-clean, `golangci-lint`-clean (0 issues, full dc-02 linter set),
+all tests passing across five packages:
+- `internal/embed` — the Ollama embeddings client.
+- `internal/episodic` — the Tier-2 SQLite store: events, tasks, runs, stats, and
+  fused keyword + semantic recall.
+- `internal/canonical` — the Tier-1 markdown/YAML file store: path-safe access
+  and `last_updated` frontmatter stamping.
+- `internal/memoryserver` — the MCP server exposing the six memory tools
+  (`memory_log`, `memory_recall`, `memory_canonical_read`,
+  `memory_canonical_write`, `memory_task`, `memory_stats`).
+- `cmd/devcore-memory` — the server entrypoint; registered in `.mcp.json`.
+  Smoke-tested: opens the stores, serves over stdio, exits cleanly on EOF.
+
+Pivot during this phase: dropped sqlite-vec; the store now runs on
+`modernc.org/sqlite` (pure Go) with recall computed in Go — see `change_log.md`.
+
+Docs reconciled with the implementation: buildspec §4.3 / §5 / §6.1 / §9 / §11
+and the README brought current; the sqlite-vec pivot, the `cmd/`+`internal/`
+layout choice, and the `Stop` hook moving to Phase 2 are recorded in `change_log.md`.
+
+Phase 1 exit met: an agent can `memory_log` an event and `memory_recall` it by
+keyword and by semantic similarity (verified by tests). The `Stop` logging hook
+moved to Phase 2 — there are no agent runs to log until orchestration exists.
