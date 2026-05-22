@@ -1,0 +1,27 @@
+# DevCore — .gitignore
+# What does NOT belong in version control. See CODING_STANDARDS.md dc-06.
+
+# Tier 2 episodic memory — a growing binary; backed up separately, never versioned.
+.devcore/state/
+
+# Secrets — never committed.
+.env
+.env.*
+!.env.example
+
+# macOS.
+.DS_Store
+
+# Xcode.
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Go build output.
+/bin/
+*.test
+*.out
+
+# Editor noise.
+*.swp
+.idea/

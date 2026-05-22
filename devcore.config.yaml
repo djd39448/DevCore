@@ -1,0 +1,62 @@
+# devcore.config.yaml
+# ---------------------------------------------------------------------------
+# The single configuration file for a DevCore deployment.
+# To repoint DevCore at a new workload, or to swap every agent's model from the
+# Claude API to a local model, edit only this file. See buildspec.md §6.3.
+# ---------------------------------------------------------------------------
+
+project:
+  name:          sous-chef-ios            # workload #1: port sous-chef-ai to iOS
+  workload_repo: ../sous-chef-ai          # the source web app (cloned beside DevCore)
+  output_repo:   ../sous-chef-ios         # the iOS app DevCore produces
+  workload_spec: .devcore/tasks/sous-chef-port.md   # authored in Phase 3
+
+memory:
+  canonical_dir: .devcore/memory                    # Tier 1 — git-versioned files
+  episodic_db:   .devcore/state/episodic.sqlite     # Tier 2 — built in Phase 1
+  embeddings:
+    provider: ollama
+    model:    nomic-embed-text
+    endpoint: "http://localhost:11434"
+
+models:
+  proxy:
+    type:     claude-code-router
+    endpoint: "http://localhost:8787"
+  profiles:
+    # api   — Claude API directly (build-phase default)
+    # local — claude -> claude-code-router -> Ollama (Studio phase / wiring test)
+    api:
+      base_url: null
+      model:    claude-sonnet-4-6
+    local:
+      base_url: "http://localhost:8787"
+      model:    llama3.1
+
+agents:
+  # prompt files are authored in Phase 2; profile selects a model from above.
+  conductor:
+    profile: api
+    prompt:  prompts/conductor.md
+  analyst:
+    profile: api
+    prompt:  prompts/analyst.md
+  architect:
+    profile: api
+    prompt:  prompts/architect.md
+  builder:
+    profile: api
+    prompt:  prompts/builder.md
+    tracks:  [backend, data, ios]
+  reviewer:
+    profile: api
+    prompt:  prompts/reviewer.md
+  verifier:
+    profile: local                 # local-pinned: exercises the proxy wiring
+    prompt:  prompts/verifier.md
+
+gates:                             # human approval checkpoints (buildspec §7)
+  - after:  behavior_spec
+  - after:  contract
+  - after:  track_plan
+  - before: deploy

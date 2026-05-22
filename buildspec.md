@@ -304,6 +304,8 @@ DevCore/
   README.md
   buildspec.md                  ← this document
   CODING_STANDARDS.md           ← canonical coding standard (dc-00–dc-07)
+  build_log.md                  ← chronological build progress
+  change_log.md                 ← decision & direction-change record
   devcore.config.yaml           ← the one config file (§6.3)
   CLAUDE.md                     ← thin: pointers + memory index only
   .gitignore                    ← ignores .devcore/state/
