@@ -147,3 +147,60 @@ Findings fixed:
 All gates green afterwards: `gofumpt`, `go vet`, `golangci-lint` (0 issues),
 `go test`; `swiftformat`, `swiftlint`; `shellcheck`; the Go module and
 `DevCore.app` both build clean.
+
+## 2026-05-23 · Phase 6 — Desktop app · read-wiring (layer 1)
+
+The desktop shell now shows **real DevCore state** in place of the prototype's
+mock fixtures, via a small local HTTP API:
+
+- `cmd/devcore-api` — a new entrypoint binary. Opens the same two stores
+  (`internal/episodic`, `internal/canonical`) read-only, binds `127.0.0.1` on
+  a kernel-chosen ephemeral port, prints `LISTENING:<port>\n` on stdout, and
+  serves the read paths under `/api/`.
+- `internal/apiserver` — a new package holding the HTTP handler. Five
+  read-only endpoints: `/api/stats`, `/api/tasks`, `/api/runs`, `/api/events`,
+  `/api/canonical` (list + read by `?path=`). All GET-only, JSON-only,
+  `Access-Control-Allow-Origin: *` (the page origin is `devcore://`).
+  Limits are clamped server-side; bad limits return 400; canonical path
+  rejections surface as 404. Server has its own modest timeouts and a
+  two-second graceful shutdown.
+- `internal/episodic` — added `ListEvents(ctx, limit)` (newest-first, the
+  simple read path) and JSON struct tags on `Event` so the API can encode
+  rows directly.
+- `desktop/Shell/main.swift` — the AppKit shell now owns an `APIProcess`. On
+  launch it walks up from the bundle looking for `devcore.config.yaml` to
+  locate the repo root, then spawns `devcore-api` with explicit
+  `--episodic-db` / `--canonical-dir` flags, waits up to five seconds for
+  the `LISTENING:<port>` handshake, and loads the page with
+  `?api=http://127.0.0.1:<port>`. The subprocess is terminated on app exit.
+  If the API fails to start, the page loads without `?api=` and falls back
+  to the prototype mocks rather than blanking out.
+- `desktop/web/api.jsx` — new file. Exposes hooks
+  (`useStats`, `useTasks`, `useEvents`, `useCanonical`, `useCanonicalDoc`)
+  on `window.DevCoreAPI`. Each hook polls on its own cadence (5s for stats
+  and events; 10s for tasks; 30s for canonical). The API base URL is read
+  from `?api=` once, validated as a localhost-only URL, and any value
+  pointing elsewhere is rejected.
+- `desktop/web/app.jsx` / `views.jsx` — `Sidebar`, the statusbar,
+  `EventsView`, `CanonicalView`, and `TasksView` now consume the hooks and
+  overlay real numbers on top of the cosmetic `useLiveRun()` animation.
+  Each view labels itself "live" or "placeholder" so it's clear which mode
+  is rendering. The prototype's static rows remain as the offline fallback.
+- `desktop/build.sh` — now builds `devcore-api` alongside the Swift shell
+  and bundles it under `Contents/MacOS/`.
+
+Tests added: `apiserver` package gets 11 tests covering every endpoint,
+filters, limit handling, traversal rejection, method-not-allowed, and the
+CORS preflight. `episodic` package gets 3 tests for `ListEvents` (ordering,
+limit, rejection of non-positive limit).
+
+All gates green: `gofumpt`, `go vet`, `golangci-lint` (0 issues), `go test`
+across all packages; `swiftformat`, `swiftlint`; `shellcheck`. `./build.sh`
+produces a working `DevCore.app` (Swift shell ~150 KB + Go API binary
+~14 MB). End-to-end smoke test: launching the binary directly prints
+`LISTENING:<port>` and `curl http://127.0.0.1:<port>/api/stats` returns
+real counts from an empty `.devcore/state/episodic.sqlite`.
+
+The page chrome (toolbar, sidebar, live-run animation) is intentionally left
+on its cosmetic ticker — those layers wire to real run state in Phase 4 when
+the Go Engine produces actual agent runs to log against.

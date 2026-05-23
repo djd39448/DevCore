@@ -16,7 +16,35 @@ const TASKS = [
   { id: 'T-211', d: 2, title: 'Revisit contract: recall ranking parameters',       agent: 'architect',       status: 'pending', st: '' },
 ];
 
+// taskStatusClass maps a DevCore task status to the prototype's pill class.
+// Unknown statuses fall through to the neutral pill.
+const TASK_STATUS_CLASS = {
+  active: 'is-active',
+  review: 'is-warn',
+  done: 'is-ok',
+  blocked: 'is-blocked',
+  pending: '',
+  abandoned: '',
+};
+
 function TasksView() {
+  // When the API is reachable, render live tasks; otherwise show the
+  // prototype's fixed sample so the layout never blanks out.
+  const live = window.DevCoreAPI ? window.DevCoreAPI.useTasks() : { data: null };
+  const rows = live.data
+    ? live.data.map(t => ({
+        id: t.id,
+        d: 0, // depth from real tasks is flat for now; tree-mode arrives with Phase 3
+        title: t.title,
+        agent: t.assigned_agent || '—',
+        status: t.status,
+        st: TASK_STATUS_CLASS[t.status] || '',
+        updated: t.updated_at || '',
+      }))
+    : TASKS.map(t => ({ ...t, updated: '' }));
+
+  const counts = countByStatus(rows);
+
   return (
     <div className="dc-fade-in">
       <div className="dc-page-h">
@@ -28,35 +56,55 @@ function TasksView() {
         </div>
       </div>
       <p className="dc-page-sub">
-        The Conductor decomposed cycle 14 into twelve tasks. Three are on the floor;
-        one is blocked on the local-model proxy. Status pills mirror the episodic store.
+        The Conductor decomposes each cycle into tasks. Status pills mirror the
+        episodic store; new agents pick up <em>active</em> rows from the top.
       </p>
 
       <div className="dc-card">
         <div className="dc-card-h">
-          <div className="dc-card-h-title">Tree · cycle 14</div>
-          <span className="dc-mono-faint">3 active · 2 review · 6 pending · 1 blocked</span>
+          <div className="dc-card-h-title">Tasks{live.data ? ' · live' : ' · placeholder'}</div>
+          <span className="dc-mono-faint">
+            {counts.active} active · {counts.review} review · {counts.pending} pending · {counts.blocked} blocked
+          </span>
         </div>
         <div style={{ padding: '4px 18px 8px' }}>
           <div className="tasks">
             <div className="task-row" style={{ borderTop: 0, color: 'var(--ink-faint)', fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               <span/><span>id</span><span>title</span><span>status</span><span>agent</span><span>updated</span>
             </div>
-            {TASKS.map((t, i) => (
+            {rows.map((t, i) => (
               <div className={`task-row ${t.d === 1 ? 'is-child' : t.d === 2 ? 'is-grandchild' : ''}`} key={t.id}>
                 <span className="tw">{t.d === 0 ? '▾' : t.d === 1 ? '└' : '·'}</span>
                 <span className="id">{t.id}</span>
                 <span className="ti">{t.title}</span>
                 <span><span className={`dc-pill ${t.st}`}><span className="dot"/>{t.status}</span></span>
                 <span className="ag">{t.agent}</span>
-                <span className="dc-mono-faint" style={{ textAlign: 'right' }}>{['just now', '2m', '4m', '12m', '1h', '3h'][i % 6]}</span>
+                <span className="dc-mono-faint" style={{ textAlign: 'right' }}>
+                  {t.updated || ['just now', '2m', '4m', '12m', '1h', '3h'][i % 6]}
+                </span>
               </div>
             ))}
+            {rows.length === 0 && (
+              <div className="task-row" style={{ gridTemplateColumns: '1fr', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
+                <span>No tasks yet. The Conductor will populate this list in Phase 3.</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+// countByStatus produces the header summary line. Unknown statuses are
+// counted under "other" so the totals always tie back to rows.length.
+function countByStatus(rows) {
+  const out = { active: 0, review: 0, pending: 0, blocked: 0, done: 0, other: 0 };
+  for (const r of rows) {
+    if (Object.prototype.hasOwnProperty.call(out, r.status)) out[r.status] += 1;
+    else out.other += 1;
+  }
+  return out;
 }
 
 // ─── Memory ─────────────────────────────────────────────────────────

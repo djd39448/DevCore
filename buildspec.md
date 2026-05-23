@@ -311,6 +311,16 @@ custom URL scheme. This delivers a working app fast; a full SwiftUI
 nativization is a later pass (§10). The webview shell is for DevCore's *own*
 tool only — every application DevCore *builds* is genuine native code.
 
+The shell launches a sidecar HTTP API binary (`cmd/devcore-api`, package
+`internal/apiserver`) as a child process. It binds `127.0.0.1` on a kernel-
+chosen ephemeral port, prints `LISTENING:<port>` on stdout, and serves
+read-only JSON over five endpoints: `/api/stats`, `/api/tasks`, `/api/runs`,
+`/api/events`, `/api/canonical` (list / read by `?path=`). The Swift shell
+reads the port and passes it to the page as `?api=http://127.0.0.1:<port>`;
+the page's hooks (`desktop/web/api.jsx`) poll the endpoints and overlay real
+DevCore state on the prototype's views. If the API fails to start, the page
+falls back to placeholder data rather than blanking.
+
 ---
 
 ## 5. Repository Layout
@@ -357,12 +367,14 @@ DevCore/
 
   cmd/
     devcore-memory/             ← Go: the memory MCP server     (Phase 1)
+    devcore-api/                ← Go: the desktop-app HTTP API  (Phase 6)
     devcore/                    ← Go: the Engine CLI            (Phase 4)
   internal/
     embed/                      ← Ollama embeddings client      (Phase 1)
     episodic/                   ← Tier-2 SQLite store           (Phase 1)
     canonical/                  ← Tier-1 file store             (Phase 1)
     memoryserver/               ← memory MCP server + tools     (Phase 1)
+    apiserver/                  ← read-only HTTP for desktop    (Phase 6)
     engine/                     ← orchestration loop            (Phase 4)
     agents/                     ← agent process runner          (Phase 4)
   scripts/                      ← setup, doctor, backup helpers
@@ -625,9 +637,15 @@ before Phase 0 begins.
 - **Exit:** DevCore runs end-to-end with no cloud model calls.
 
 ### Phase 6 — Desktop app
-- **Deliverables:** the DevCore desktop app (§4.8) — the native macOS shell
-  hosting the design prototype, then its views wired to the live engine and
-  `devcore-memory`. Independent of Phases 3–5; can be built in parallel.
+- **Deliverables:** the DevCore desktop app (§4.8). Built in layers:
+  1. **Shell** — the AppKit + `WKWebView` window hosting the prototype.
+  2. **Read-wiring** — the `devcore-api` sidecar and `api.jsx` hooks; views
+     show real memory state. *(Layer 1 and 2 complete — 2026-05-22 / 2026-05-23.)*
+  3. **Write-wiring** — interactive controls (chat dispatch, gate approval,
+     task ops) hit `devcore-memory` and, once it exists, the engine.
+  4. **Live run** — the live-loop animation reflects actual agent activity
+     (lands alongside the Phase 4 engine).
+  Independent of Phases 3–5; can be built in parallel.
 - **Exit:** the app launches, renders, and reflects real DevCore state.
 
 ---

@@ -1,4 +1,10 @@
-// app.jsx — window chrome + sidebar + view router + tweaks
+// app.jsx — window chrome + sidebar + view router + tweaks.
+//
+// Live data is overlaid on top of the prototype's animated fixtures: the
+// useLiveRun() hook (live-run.jsx) supplies a cosmetic loop animation, and
+// window.DevCoreAPI.useStats() supplies real episodic-store counts when the
+// devcore-api subprocess is reachable. Real numbers win when present; mocked
+// numbers fill in when the API is offline so the page still looks alive.
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "light",
@@ -6,6 +12,14 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "density": "regular",
   "sidebar": "full"
 }/*EDITMODE-END*/;
+
+// formatCount renders an integer the way the nav badges expect: small numbers
+// pass through unchanged; >=1000 collapses to a "1.2k" form so the badge
+// stays narrow.
+function formatCount(n) {
+  if (n < 1000) return String(n);
+  return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+}
 
 // Helpers — convert hex to rgba for the soft/line accents
 function hexToRgba(hex, a) {
@@ -69,7 +83,10 @@ function Glyph({ name }) {
 }
 
 // ─── Sidebar ────────────────────────────────────────────────────────
-function Sidebar({ view, setView, tokensIn, tokensOut, cost }) {
+function Sidebar({ view, setView, tokensIn, tokensOut, cost, liveEvents }) {
+  // Overlay real episodic counts onto the static nav badges when the API is
+  // reachable. The `liveEvents` value is null when the API is offline.
+  const eventsBadge = liveEvents !== null ? formatCount(liveEvents) : null;
   return (
     <aside className="dc-sidebar">
       <div className="dc-brand">
@@ -82,6 +99,9 @@ function Sidebar({ view, setView, tokensIn, tokensOut, cost }) {
 
       {NAV.map((item, i) => {
         if (item.section) return <div className="dc-nav-section" key={'s-' + i}>{item.section}</div>;
+        // Replace the "Episodic" badge with the live event count when the
+        // API reports one; leave the others on their static prototype values.
+        const badge = item.id === 'events' && eventsBadge !== null ? eventsBadge : item.badge;
         return (
           <div className="dc-nav" key={item.id}>
             <div
@@ -90,8 +110,8 @@ function Sidebar({ view, setView, tokensIn, tokensOut, cost }) {
             >
               <span className="dc-nav-glyph"><Glyph name={item.glyph}/></span>
               <span className="dc-nav-label">{item.label}</span>
-              {item.badge && (
-                <span className={`dc-nav-badge ${item.badgeClass || ''}`}>{item.badge}</span>
+              {badge && (
+                <span className={`dc-nav-badge ${item.badgeClass || ''}`}>{badge}</span>
               )}
             </div>
           </div>
@@ -113,6 +133,11 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [view, setView] = React.useState('chat');
   const run = useLiveRun();
+  // Real episodic counts (null until the API responds; null forever if the
+  // API is not reachable). The cosmetic `run.eventsTotal` is used as a
+  // fallback so the chrome still has a number when offline.
+  const stats = window.DevCoreAPI ? window.DevCoreAPI.useStats() : { data: null };
+  const liveEvents = stats.data ? stats.data.events : null;
 
   React.useEffect(() => {
     const r = document.documentElement;
@@ -145,6 +170,7 @@ function App() {
           tokensIn={run.tokensIn}
           tokensOut={run.tokensOut}
           cost={run.cost}
+          liveEvents={liveEvents}
         />
         <div className="dc-main">
           <div className="dc-titlebar">
@@ -173,7 +199,10 @@ function App() {
           </div>
 
           <div className="dc-statusbar">
-            <span><span className="sb-dot"/>memory · {run.eventsTotal.toLocaleString()} events</span>
+            <span>
+              <span className="sb-dot"/>
+              memory · {(liveEvents !== null ? liveEvents : run.eventsTotal).toLocaleString()} events
+            </span>
             <span className="sb-sep"/>
             <span>recall · keyword + vector · rrf k=60</span>
             <span className="sb-sep"/>
@@ -220,6 +249,13 @@ const CANON_DOCS = [
   { dir: 'conventions/',  name: 'devcore-coding-standards.md', owner: 'reviewer', age: '14d', words: 3104 },
 ];
 function CanonicalView() {
+  // Pull the live list of .md files from the API; fall back to the prototype
+  // fixture when the API is offline so the view never blanks out.
+  const live = window.DevCoreAPI ? window.DevCoreAPI.useCanonical() : { data: null };
+  const docs = (live.data && Array.isArray(live.data.docs))
+    ? live.data.docs.map(splitDocPath)
+    : CANON_DOCS.map(d => ({ dir: d.dir, name: d.name }));
+
   return (
     <div className="dc-fade-in">
       <div className="dc-page-h">
@@ -234,22 +270,27 @@ function CanonicalView() {
       <div className="dc-card">
         <div className="dc-card-h">
           <div className="dc-card-h-title">.devcore/memory/</div>
-          <span className="dc-mono-faint">{CANON_DOCS.length} docs · 11.0k words</span>
+          <span className="dc-mono-faint">
+            {docs.length} {docs.length === 1 ? 'doc' : 'docs'}
+            {live.data ? ' · live' : ' · placeholder'}
+          </span>
         </div>
         <div style={{ padding: '0 18px 8px' }}>
           <div className="tasks">
-            <div className="task-row" style={{ borderTop: 0, color: 'var(--ink-faint)', fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', gridTemplateColumns: '120px 1fr 100px 80px 80px' }}>
-              <span>dir</span><span>file</span><span>owner</span><span>words</span><span>updated</span>
+            <div className="task-row" style={{ borderTop: 0, color: 'var(--ink-faint)', fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', gridTemplateColumns: '180px 1fr' }}>
+              <span>dir</span><span>file</span>
             </div>
-            {CANON_DOCS.map(d => (
-              <div className="task-row" key={d.dir + d.name} style={{ gridTemplateColumns: '120px 1fr 100px 80px 80px' }}>
-                <span className="dc-mono-muted">{d.dir}</span>
+            {docs.map((d, i) => (
+              <div className="task-row" key={(d.dir + d.name) || i} style={{ gridTemplateColumns: '180px 1fr' }}>
+                <span className="dc-mono-muted">{d.dir || '/'}</span>
                 <span className="ti" style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>{d.name}</span>
-                <span className="ag">{d.owner}</span>
-                <span className="dc-mono-muted">{d.words.toLocaleString()}</span>
-                <span className="dc-mono-faint">{d.age}</span>
               </div>
             ))}
+            {docs.length === 0 && (
+              <div className="task-row" style={{ gridTemplateColumns: '1fr', color: 'var(--ink-muted)', fontStyle: 'italic' }}>
+                <span>No canonical memory yet.</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -257,11 +298,24 @@ function CanonicalView() {
   );
 }
 
+// splitDocPath turns "a/b/file.md" into { dir: "a/b/", name: "file.md" }.
+// A top-level file becomes { dir: "", name: "file.md" }.
+function splitDocPath(path) {
+  const slash = path.lastIndexOf('/');
+  if (slash < 0) return { dir: '', name: path };
+  return { dir: path.slice(0, slash + 1), name: path.slice(slash + 1) };
+}
+
 function EventsView() {
-  // Reuse log lines from live run but with full table layout
+  // Live event log when the API is reachable; the seeded prototype rows
+  // otherwise. Real events get mapped into the same row shape the original
+  // table renders, so the layout below stays unchanged.
   const [filter, setFilter] = React.useState('all');
   const filters = ['all', 'decision', 'action', 'correction', 'learning', 'note'];
-  const rows = (window.__seedEvents || (window.__seedEvents = seedEvents()));
+  const live = window.DevCoreAPI ? window.DevCoreAPI.useEvents(200) : { data: null };
+  const rows = live.data
+    ? live.data.map(eventToRow)
+    : (window.__seedEvents || (window.__seedEvents = seedEvents()));
   const filtered = filter === 'all' ? rows : rows.filter(r => r.type === filter);
   return (
     <div className="dc-fade-in">
@@ -341,6 +395,53 @@ function seedEvents() {
     t = new Date(t.getTime() - (30 + Math.random() * 90) * 1000);
   }
   return out;
+}
+
+// eventToRow projects a DevCore episodic event (from /api/events) into the
+// row shape the events table renders. The CSS pill class is picked from the
+// event type so live rows light up the same colors as the prototype's seeds.
+const EVENT_TYPE_CLASS = {
+  decision: 'is-active',
+  correction: 'is-active',
+  learning: 'is-ok',
+  action: '',
+  note: '',
+  error: '',
+};
+function eventToRow(event) {
+  return {
+    id: event.id,
+    time: formatEventTime(event.ts),
+    type: event.type,
+    klass: EVENT_TYPE_CLASS[event.type] || '',
+    agent: event.agent || '—',
+    summary: event.summary,
+    ref: refsFirst(event.refs),
+  };
+}
+
+// formatEventTime renders an RFC3339 timestamp as HH:MM:SS, matching the
+// prototype's existing column. Unparseable input falls back to the raw value.
+function formatEventTime(ts) {
+  if (!ts) return '';
+  const parsed = new Date(ts);
+  if (isNaN(parsed.getTime())) return ts;
+  const pad = (n) => String(n).padStart(2, '0');
+  return pad(parsed.getHours()) + ':' + pad(parsed.getMinutes()) + ':' + pad(parsed.getSeconds());
+}
+
+// refsFirst extracts the first reference from the stored JSON array of refs,
+// or returns the raw string when it does not parse as JSON. The events table
+// shows at most one ref per row.
+function refsFirst(refs) {
+  if (!refs) return '';
+  try {
+    const parsed = JSON.parse(refs);
+    if (Array.isArray(parsed) && parsed.length > 0) return String(parsed[0]);
+  } catch (_e) {
+    // Not JSON — render the raw string as the ref.
+  }
+  return refs;
 }
 
 window.App = App;

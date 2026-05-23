@@ -18,17 +18,19 @@ import (
 // the influence of rank position so neither list dominates.
 const rrfK = 60
 
-// Event is one entry in the episodic log — a single thing an agent did.
+// Event is one entry in the episodic log — a single thing an agent did. The
+// JSON field names are part of devcore-api's wire contract (cmd/devcore-api):
+// renaming a field renames its API column.
 type Event struct {
-	ID      int64  // assigned by the store on insert; ignored as LogEvent input
-	TS      string // RFC3339 timestamp of when the event occurred
-	Agent   string // the agent that produced the event
-	TaskID  string // the task this event belongs to, or "" if none
-	RunID   string // the run this event belongs to, or "" if none
-	Type    string // decision | action | correction | learning | error | note
-	Summary string // one-line description; scored for keyword recall
-	Detail  string // optional longer description; also scored
-	Refs    string // optional JSON array of file or commit references
+	ID      int64  `json:"id"`      // assigned by the store on insert; ignored as LogEvent input
+	TS      string `json:"ts"`      // RFC3339 timestamp of when the event occurred
+	Agent   string `json:"agent"`   // the agent that produced the event
+	TaskID  string `json:"task_id"` // the task this event belongs to, or "" if none
+	RunID   string `json:"run_id"`  // the run this event belongs to, or "" if none
+	Type    string `json:"type"`    // decision | action | correction | learning | error | note
+	Summary string `json:"summary"` // one-line description; scored for keyword recall
+	Detail  string `json:"detail"`  // optional longer description; also scored
+	Refs    string `json:"refs"`    // optional JSON array of file or commit references
 }
 
 // Hit is one event returned by RecallEvents, with its fused relevance score
@@ -65,6 +67,36 @@ func (s *Store) LogEvent(ctx context.Context, e Event, embedding []float32) (int
 		return 0, fmt.Errorf("reading new event id: %w", err)
 	}
 	return id, nil
+}
+
+// ListEvents returns the most recent events, newest first. limit caps the
+// number of rows returned and must be positive. ListEvents is the simple
+// read path for UIs — RecallEvents is the ranked search path.
+func (s *Store) ListEvents(ctx context.Context, limit int) ([]Event, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit must be positive, got %d", limit)
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, ts, agent, task_id, run_id, type, summary, detail, refs
+		 FROM events ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("listing events: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var events []Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.TS, &e.Agent, &e.TaskID, &e.RunID,
+			&e.Type, &e.Summary, &e.Detail, &e.Refs); err != nil {
+			return nil, fmt.Errorf("scanning event row: %w", err)
+		}
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading events: %w", err)
+	}
+	return events, nil
 }
 
 // RecallEvents returns events relevant to queryText, ranked by a fusion of

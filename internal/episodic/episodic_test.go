@@ -262,6 +262,51 @@ func TestRecallLimitExceedsEventCount(t *testing.T) {
 	}
 }
 
+func TestListEventsReturnsNewestFirst(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t)
+
+	logOrFail(t, store, episodic.Event{TS: "1", Type: "note", Summary: "first"}, vector(0.1))
+	logOrFail(t, store, episodic.Event{TS: "2", Type: "note", Summary: "second"}, vector(0.2))
+	logOrFail(t, store, episodic.Event{TS: "3", Type: "note", Summary: "third"}, vector(0.3))
+
+	got, err := store.ListEvents(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("ListEvents returned %d rows, want 3", len(got))
+	}
+	if got[0].Summary != "third" || got[2].Summary != "first" {
+		t.Fatalf("order = %q…%q, want third…first (newest first)",
+			got[0].Summary, got[2].Summary)
+	}
+}
+
+func TestListEventsHonorsLimit(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t)
+	for i := 0; i < 5; i++ {
+		logOrFail(t, store, episodic.Event{TS: "t", Type: "note", Summary: "e"}, vector(0.1))
+	}
+
+	got, err := store.ListEvents(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("ListEvents(limit=2) returned %d rows, want 2", len(got))
+	}
+}
+
+func TestListEventsRejectsNonPositiveLimit(t *testing.T) {
+	t.Parallel()
+	store := openTestStore(t)
+	if _, err := store.ListEvents(context.Background(), 0); err == nil {
+		t.Fatal("ListEvents accepted limit=0, want an error")
+	}
+}
+
 // logOrFail logs an event or fails the test.
 func logOrFail(t *testing.T, store *episodic.Store, e episodic.Event, embedding []float32) {
 	t.Helper()
