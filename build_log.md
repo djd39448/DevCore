@@ -344,3 +344,94 @@ The workload spec marks all three gates passed.
 Suggested Phase 4 starting order (`plan/integration.md` §4):
 foundations in parallel (week 1) → first read-only slice end-to-end
 (week 2) → AI surface (week 3) → polish + TestFlight (week 4).
+
+## 2026-05-24 · Phase 4 — Sous-chef Week 1 foundations ✅
+
+DevCore decided at the Phase 3→4 boundary to **skip the Go Engine for
+now** and ship sous-chef Phase 4 with thin orchestration (the same
+session-as-Conductor model that walked Phase 3). The buildspec §10
+open question — "Engine needed, or thin orchestration sufficient?" —
+gets a "thin sufficient" answer informed by Phase 3's clean run; the
+Engine becomes Phase 4.5 if/when manual gates feel like the wrong
+shape at scale.
+
+Three Builder subagents dispatched in parallel against
+`~/Sous-Chef-Claude2/`, each committing to its own
+`track-{backend,data,ios}-week1` branch:
+
+- **track-data-week1** ✅ — 5 commits, ~1660 LOC under `data/`.
+  Supabase CLI declarative-state project; 8 tables with 17 named
+  CHECK constraints, 13 indexes; RLS+FORCE on every table with 30
+  policies using `(select auth.uid())` per ADR-0011; ownership-
+  through-parent tables routed via `STABLE SECURITY DEFINER` helpers
+  in an `app_private` schema; cookbook-images Storage bucket + 4
+  storage policies + same-transaction BEFORE DELETE trigger per
+  ADR-0004; first pgTAP cross-user RLS isolation test (8
+  assertions); Makefile with `doctor` target reporting on
+  prerequisite tools. `supabase db reset` not yet exercised against
+  the local stack — neither Supabase CLI nor Docker installed; the
+  declarative state is committed and verifiable once those land.
+
+- **track-ios-week1** ✅ — 3 commits, ~1430 LOC under `ios/`.
+  Xcode app target (`SousChef.xcodeproj`, regeneratable via XcodeGen
+  from `project.yml`); SousChefKit Swift Package with 5 library
+  targets (`Domain`, `API`, `Auth`, `Markdown`, `ImageCache`) — none
+  of which import SwiftUI, so dc-03's "models never import UI"
+  becomes compile-time enforced. 5-tab TabView shell (Chat, Plan,
+  Calendar, Cookbook, Shopping); mocked email/OTP login UI (auth
+  wiring deferred to Week 2). All gates green: swiftformat,
+  swiftlint, swift build, swift test, xcodebuild under Swift 6
+  strict-concurrency.
+
+- **track-backend-week1** 🟡 → ✅ — 2 commits, ~700 LOC under
+  `backend/`. The Builder **stalled mid-refactor** (moved three base
+  middlewares from `server.go` into a `middleware/` package but
+  didn't update server.go's call sites before the stream watchdog
+  killed it at 600s of silence). Conductor salvaged: finished the
+  refactor in-place (three call-site renames + an import + dropped
+  an unused `writeServerError` pivot per dc-00 "no dark code"),
+  committed the salvaged scaffold, then completed the remaining
+  Phase A items: `cmd/sous-chef-api/main.go`, Dockerfile (multi-
+  stage → distroless/static), Makefile, .golangci.yml (the dc-02
+  set), .dockerignore, and `server_test.go` covering /healthz shape
+  + request-id propagation + 404 fallback. All gates green;
+  `make build` produces a 5.8 MB stripped binary.
+
+**Key lesson:** the three parallel agents shared the **same working
+tree** (I ran `Agent(...)` without `isolation: "worktree"`). The data
+and iOS agents self-mitigated by chaining commits in single bash
+invocations and staging only their own subtree — that's good
+agent-side hygiene, but it shouldn't be necessary. The iOS agent
+hit one race (an iOS commit briefly landed on `track-data-week1`)
+and had to cherry-pick + rebase to fix it. The backend agent stall
+may have been related — pure speculation, but contention on the
+working tree is the kind of thing that produces 10-minute silences.
+
+**Action:** future parallel agent dispatches MUST use
+`isolation: "worktree"` so each agent gets its own checkout. This
+goes into the Conductor playbook (informally tracked in this
+build log; once we have a `prompts/conductor-playbook.md` or
+similar doc the rule lands there).
+
+Three tracks merged to `main` of `Sous-Chef-Claude2` (commits
+`7736004` data, `8dbec0c` iOS, `c622e78` backend; tip `c622e78`,
+pushed). Branches cleaned up. Repo now has:
+
+```
+Sous-Chef-Claude2/
+├── README.md           (initial)
+├── .gitignore          (initial + iOS extensions)
+├── backend/            ✅ Go scaffold, builds clean, tests pass
+├── data/               ✅ Supabase declarative schemas + RLS + storage
+└── ios/                ✅ Xcode + SwiftPM project, builds clean
+```
+
+Each track's `internal/.../README.md` cross-references its track plan
+in DevCore. The contract, the 11 ADRs, and the integration synthesis
+remain the source of truth in DevCore — output repo never edits them.
+
+Phase 4 Week 2 unblocked. Next slice (per integration.md §4): first
+read-only end-to-end — data writes a few seeded CFO rows, backend
+exposes a single read endpoint (e.g. GET /api/kitchen/ingredients),
+iOS renders it. Crosses all three tracks, validates the JWT-aware
+connection model, and produces something operable on a device.
