@@ -204,3 +204,76 @@ real counts from an empty `.devcore/state/episodic.sqlite`.
 The page chrome (toolbar, sidebar, live-run animation) is intentionally left
 on its cosmetic ticker — those layers wire to real run state in Phase 4 when
 the Go Engine produces actual agent runs to log against.
+
+## 2026-05-24 · Phase 3 — Thin orchestration + first real work ✅
+
+DevCore did real work for the first time. The Conductor walked the human-
+gated loop manually (this Claude Code session); the Analyst and Architect
+were dispatched as subagents over the cloned source repo. Two gates passed.
+
+**Inputs**
+- Source pin: `d884efae9cc150df2a58afc255b3e631d31b5d2b` of
+  `github.com/djd39448/sous-chef-ai`, cloned to `~/sous-chef-ai`.
+- Workload spec authored at `.devcore/tasks/sous-chef-port.md` — the
+  human-authored seed. Re-platform map, must-preserve / must-cut, five
+  open decisions, four gates.
+
+**Behavior_spec gate ✅**
+
+Analyst run (general-purpose sub-agent under the Analyst role prompt,
+~7 min, 167k tokens, 43 tool uses) produced:
+- `domain/sous-chef-behaviors.md` — 1098 lines. Product summary, 11
+  entities (CFO with its four roles + four inventory states + uniqueness
+  rule; meal_plans, days, recipes, cookbook, shopping, conversations,
+  ingredient_memory, users, sessions), all 9 React pages with state
+  transitions, AI behaviors (system prompt + four tool calls + SSE
+  protocol + image generation + meal-plan random-cuisine generation +
+  recipe-page chat), the full REST surface, five state machines, the
+  auth flow split into "survives / does not", must-preserve / must-cut,
+  and 10 open questions for the Architect.
+- `decisions/0001-voice-features.md` — Voice cut. Reasoning: the voice
+  path is **complete scaffolding that is never wired in** at the pin,
+  so we're "deciding not to add" rather than "removing".
+
+At the gate Dave pre-decided the four remaining workload-spec open
+decisions, captured by the Conductor as ADRs 0002–0005:
+- **0002** — Direct OpenAI (tool-call shape, gpt-image-1, SSE all port).
+- **0003** — SIWA + Supabase email/OTP; Supabase JWT bearer to Go API.
+- **0004** — Cookbook images: Supabase Storage + on-device LRU (128 MB);
+  generate at save, regenerate only on explicit request.
+- **0005** — SwiftUI NavigationStack, no Universal Links v1.
+
+**Contract gate ✅**
+
+Architect run (general-purpose sub-agent under the Architect role prompt,
+~8 min, 109k tokens, 18 tool uses) produced:
+- `contract/contract.md` — 1487 lines, nine sections: framing, auth
+  (Supabase JWT + JWKS rejection table), wire conventions, Supabase
+  schema (six tables in DDL, JSONB shapes spelled out, RLS intent),
+  REST surface grouped by resource (full request/response shapes),
+  SSE wire format, AI tool-calling (four tools + recipe-page
+  `update_meal` variant), image generation (Supabase Storage vs
+  transient data URL), ten pinned behavior rules.
+- Five Architect ADRs (0006–0010), all approved at the gate:
+  - **0006** — Drop legacy `recipes` and `ingredient_memory` tables.
+  - **0007** — Clear-checked-items requires `shoppingListId`; source
+    bug not preserved.
+  - **0008** — Recipe-page chat stays stateless.
+  - **0009** — Keep all four CFO role enum values; materialize only
+    `inventory` and `shopping` in v1.
+  - **0010** — Client computes Monday-of-week in local timezone; sends
+    ISO date; server validates Monday-ness, treats date as opaque.
+
+The Architect flagged five cross-track risks for the upcoming
+`track_plan` gate — `clientWeekStartDate` plumbing, cookbook-save UX
+during image gen, storage RLS + delete cascade, recipe markdown format
+indirection, and byte-identical tool-call schemas via a single Go
+constant.
+
+**Phase 3 closed.** All artifacts under `.devcore/memory/` (12 files
+added: 1 behavior spec, 1 contract, 10 ADRs). MEMORY.md updated. The
+workload spec marks `behavior_spec` and `contract` gates Passed.
+
+Next: the `track_plan` gate (Phase 3 → Phase 4 bridge) — three track
+plans (backend, data, ios) under `plan/`, each independently buildable
+against the contract.

@@ -618,11 +618,16 @@ before Phase 0 begins.
 - **Exit:** all agents callable; `scripts/doctor.sh` is green including the local
   path.
 
-### Phase 3 — Thin orchestration + first real work
+### Phase 3 — Thin orchestration + first real work ✅
 - **Deliverables:** the Conductor loop with manual gates. **DevCore does real
   work for the first time:** the Analyst extracts the sous-chef behavior spec; the
   Architect produces the shared contract.
 - **Exit:** behavior spec and contract exist in Tier 1 and pass their human gates.
+- **Closed 2026-05-24.** Both gates passed in one session: Analyst produced
+  the 1098-line behavior spec and ADR-0001 (voice cut); Conductor captured
+  four pre-decided open questions as ADRs 0002–0005; Architect produced the
+  1487-line contract and ADRs 0006–0010. Twelve canonical artifacts total.
+  The `track_plan` gate is the Phase 3 → Phase 4 bridge.
 
 ### Phase 4 — The Go Engine
 - **Deliverables:** the `devcore` Go binary — task state machine, headless `claude -p`
