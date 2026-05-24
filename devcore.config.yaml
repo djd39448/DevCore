@@ -8,7 +8,7 @@
 project:
   name:          sous-chef-ios            # workload #1: port sous-chef-ai to iOS
   workload_repo: ../sous-chef-ai          # the source web app (cloned beside DevCore)
-  output_repo:   ../sous-chef-ios         # the iOS app DevCore produces
+  output_repo:   ../Sous-Chef-Claude2     # the iOS app DevCore produces (github.com/djd39448/Sous-Chef-Claude2)
   workload_spec: .devcore/tasks/sous-chef-port.md   # authored in Phase 3
 
 memory:

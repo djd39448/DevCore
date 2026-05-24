@@ -5,7 +5,7 @@ status: in-progress
 last_updated: 2026-05-24
 source_repo: github.com/djd39448/sous-chef-ai
 source_commit: d884efae9cc150df2a58afc255b3e631d31b5d2b
-output_repo: github.com/djd39448/sous-chef-ios
+output_repo: github.com/djd39448/Sous-Chef-Claude2
 ---
 
 # Sous-Chef iOS Port — Workload Spec
