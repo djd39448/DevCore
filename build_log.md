@@ -274,6 +274,73 @@ constant.
 added: 1 behavior spec, 1 contract, 10 ADRs). MEMORY.md updated. The
 workload spec marks `behavior_spec` and `contract` gates Passed.
 
-Next: the `track_plan` gate (Phase 3 → Phase 4 bridge) — three track
-plans (backend, data, ios) under `plan/`, each independently buildable
-against the contract.
+**Track_plan gate ✅ (same session)**
+
+Three Builder track-pack subagents ran in parallel (backend, data, iOS)
+each producing one plan against the contract. Aggregate ~17 minutes
+wall-clock; the parallelism was real — none consulted the others.
+
+- `plan/track-backend.md` — 940 lines, 41 tasks across 12 phases. **AWS
+  target: ECS Fargate** (Lambda+API Gateway breaks SSE — idle timeout,
+  buffered writes, 30s ceiling). **SSE: stdlib only** with `http.Flusher`
+  + a 20s heartbeat goroutine; no external library. Single Go constant
+  per tool-call schema (the Architect's recommended pattern).
+- `plan/track-data.md` — 465 lines. **Supabase CLI declarative schemas**
+  per dc-04 — desired state in `supabase/schemas/*.sql`, diff-generated
+  migrations in `supabase/migrations/`, applied migrations never edited
+  (pre-commit + CI checksum gate). RLS-aware policies using
+  `(select auth.uid())`, owner tables direct, ownership-through-parent
+  tables via `STABLE SECURITY DEFINER` helpers in an `app_private`
+  schema. Cookbook image cascade as a same-transaction
+  `BEFORE DELETE` trigger.
+- `plan/track-ios.md` — 797 lines. **iOS 17** (for `@Observable`).
+  **Hybrid layout: one Xcode app target + an in-repo `SousChefKit`
+  Swift Package** split into five library targets (`Domain`, `API`,
+  `Auth`, `Markdown`, `ImageCache`); package targets cannot
+  `import SwiftUI`, making dc-03's "models never import UI" a
+  compile-time guarantee. **Hand-rolled `SousChefMarkdown` parser**
+  over the canonical recipe format (SwiftUI's `AttributedString` is
+  inline-only; third-party renderers couple to SwiftUI).
+- `plan/integration.md` — Conductor synthesis. Maps the touchpoints
+  where the tracks meet (`clientWeekStartDate` plumbing; cookbook
+  save UX during image gen; SSE wire format; Supabase Auth provider
+  config). Consolidates 18 open questions across the three plans:
+  3 Conductor-decide, 3 Dave-actions, 11 Phase-4 Builder defaults
+  with documented choices, 1 conflict.
+
+**The conflict** the gate surfaced — and resolved:
+
+- Backend track defaulted to a **service-role** Postgres connection
+  with app-level `WHERE user_id = $1` filtering.
+- Data track wrote **RLS-aware policies** using `auth.uid()`,
+  assuming the JWT flows through.
+- Mutually exclusive. Decided at the gate as **ADR-0011 — JWT-aware
+  connection.** The Go service connects as the `authenticated`
+  Postgres role; `SET LOCAL request.jwt.claim.sub` per request;
+  Postgres RLS is the source of truth. Defense-in-depth — a Go bug
+  cannot leak rows. Track-backend gets a one-task amendment via a
+  NOTE block at the top of its plan; data and iOS plans need no
+  changes.
+
+Other gate decisions (in `plan/integration.md` §3.1):
+- **TabView** iOS shell (five tabs: Chat, Plan, Calendar, Cookbook,
+  Shopping).
+- **PostgREST disabled** — iOS goes through the Go API only.
+
+Three Dave-actions called out for Phase 4 (not gate-blocking):
+Apple Developer enrollment + Service ID + SIWA provider config;
+confirm AWS staging ALB idle timeout is 600s+; settle the
+`APIBaseURL` per environment.
+
+Eleven Phase-4 Builder decisions left with documented defaults
+(UUIDv7 source, OpenAI model pin policy, `/regenerate-image`
+ownership param, inactivity window for fresh-chat, disk-cache
+location, etc.) — each Builder uses its default unless Dave objects.
+
+**Phase 3 fully closed.** 17 canonical artifacts total: 1 behavior
+spec, 1 contract, 11 ADRs, 3 track plans, 1 integration synthesis.
+The workload spec marks all three gates passed.
+
+Suggested Phase 4 starting order (`plan/integration.md` §4):
+foundations in parallel (week 1) → first read-only slice end-to-end
+(week 2) → AI surface (week 3) → polish + TestFlight (week 4).

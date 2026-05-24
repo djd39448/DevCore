@@ -31,6 +31,11 @@ This file is the map. Read it first; retrieve only what a task needs.
 | `decisions/0008-recipe-chat-stateless.md` | Recipe-page chat stays stateless (accepted) |
 | `decisions/0009-cfo-roles.md` | Keep all four CFO `usage_context.role` enum values; materialize only `inventory` and `shopping` (accepted) |
 | `decisions/0010-week-timezone.md` | Client supplies Monday-of-week in its local timezone (accepted) |
+| `plan/track-backend.md` | Backend track plan — Go on ECS Fargate, 41 tasks (accepted; see ADR-0011 amendment) |
+| `plan/track-data.md` | Data track plan — Supabase CLI declarative schemas, RLS-aware (accepted) |
+| `plan/track-ios.md` | iOS track plan — SwiftUI iOS 17, TabView shell, hybrid package + app target (accepted) |
+| `plan/integration.md` | Cross-track integration synthesis — touchpoints, gate outcomes, 18 open questions (accepted) |
+| `decisions/0011-jwt-aware-connection.md` | Backend connects JWT-aware; RLS is the source of truth (accepted) |
 
 ## Active workload
 

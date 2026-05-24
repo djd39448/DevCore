@@ -623,11 +623,15 @@ before Phase 0 begins.
   work for the first time:** the Analyst extracts the sous-chef behavior spec; the
   Architect produces the shared contract.
 - **Exit:** behavior spec and contract exist in Tier 1 and pass their human gates.
-- **Closed 2026-05-24.** Both gates passed in one session: Analyst produced
-  the 1098-line behavior spec and ADR-0001 (voice cut); Conductor captured
-  four pre-decided open questions as ADRs 0002–0005; Architect produced the
-  1487-line contract and ADRs 0006–0010. Twelve canonical artifacts total.
-  The `track_plan` gate is the Phase 3 → Phase 4 bridge.
+- **Closed 2026-05-24.** All three Phase-3 gates passed in one session.
+  Behavior_spec: Analyst's 1098-line behavior spec + ADR-0001 (voice cut);
+  Conductor captured Dave's pre-decided open questions as ADRs 0002–0005.
+  Contract: Architect's 1487-line contract + ADRs 0006–0010. Track_plan:
+  three Builder track-pack subagents ran in parallel producing the
+  backend, data, and iOS track plans; Conductor's integration synthesis
+  surfaced the RLS-vs-service-role conflict, resolved at the gate as
+  ADR-0011 (JWT-aware connection). Seventeen canonical artifacts total
+  under `.devcore/memory/`. The next gate (`deploy`) is Phase 5 territory.
 
 ### Phase 4 — The Go Engine
 - **Deliverables:** the `devcore` Go binary — task state machine, headless `claude -p`

@@ -151,12 +151,12 @@ Per `devcore.config.yaml`:
 |------|----------------|-------|--------|
 | `behavior_spec` | after | Analyst | **Passed** — 2026-05-24 |
 | `contract` | after | Architect | **Passed** — 2026-05-24 |
-| `track_plan` | after | Conductor | Pending — three track plans in `plan/` are next |
+| `track_plan` | after | Conductor | **Passed** — 2026-05-24 |
 | `deploy` | before | Verifier | Pending — Phase 5 |
 
-**Phase 3 closed at the contract gate.** The next gate (`track_plan`) is the
-Phase 3 → 4 bridge: three track plans (backend, data, ios) each independently
-buildable against the contract.
+**Phase 3 fully closed.** Three track plans + the integration synthesis are
+in `.devcore/memory/plan/`. ADR-0011 locks JWT-aware Postgres connections.
+Phase 4 opens whenever Dave chooses to begin implementation.
 
 ## 9. Out of scope (this workload only)
 
