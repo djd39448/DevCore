@@ -345,6 +345,109 @@ Suggested Phase 4 starting order (`plan/integration.md` §4):
 foundations in parallel (week 1) → first read-only slice end-to-end
 (week 2) → AI surface (week 3) → polish + TestFlight (week 4).
 
+## 2026-05-24 → 2026-05-25 · Phase 4 Week 2 — first read-only slice ✅
+
+Three Builder subagents in parallel, this time with **isolation:
+"worktree"** so each got an independent checkout (the W1 lesson
+applied). All three merged to `Sous-Chef-Claude2/main` (tip
+`f5fbd00`) with one ~3-line merge conflict on `apierror.go`'s
+dc-01 header (both my W1 Conductor audit fix and the W2 backend
+agent had tightened the same sentence in parallel; picked the
+agent's slightly more explicit phrasing).
+
+**Reviewer pass between W1 and W2** — flagged 14 items on W1.
+3 Must-fix-Week-2 resolved by Conductor inline fixes:
+integration.md §2.2 rewritten to mirror contract §8.4 (cookbook
+save persists row + nulls image_url on image-gen failure, not
+the inverse); track-backend.md §6.1 rewritten from "RLS as
+defense-in-depth backstop" to "RLS is load-bearing per
+ADR-0011"; ADR-0012 pinned the iOS bundle id at
+`com.djd39448.souschef`. Plus a code fix on data/supabase/
+seed.sql (replaced a no-op production guard with a real
+PGOPTIONS-opt-in guard) and a //nolint:contextcheck rationale
+rewrite in middleware.go. Then a Conductor first-principles
+re-audit (Dave's request) found 3 more dc-00 nits I fixed
+inline: LoginView's `onSignInSucceeded` docstring lied about a
+"mock-bypass route" that didn't exist; LoginView only had one
+#Preview (dc-07 wants one per key state); apierror's "deliberately
+does not log" doc disagreed with the slog.Default() fallback path.
+
+**Track summaries:**
+
+- **track-data-week2** (6 commits, merged at `97876e0`) — closed
+  the Reviewer pgTAP gap (4 missing scenarios for meal_plan_days /
+  kitchen_messages / cookbook-storage / delete-trigger atomicity)
+  plus an `06_all_public_tables_force_rls.sql` guard that
+  auto-discovers any unprotected public table rather than
+  maintaining a parallel list. Added a real 5-row CFO inventory
+  seed under the test user (variety across categories, statuses,
+  quantities, provenance) with the FORCE-RLS dance bracketed
+  cleanly at top level (ALTER DISABLE → DO INSERTs → ALTER ENABLE/
+  FORCE; whole-tx rollback under `supabase db reset` provides
+  the safety net). `tests/07` asserts the seed lands.
+
+- **track-backend-week2** (3 commits, merged at `84e8067`) —
+  JWT auth package (`internal/auth`) with the full contract §2.3
+  rejection table mapped through typed `apierror.Code`; ADR-0011
+  RLS-aware connection helper (`internal/store.Pool.WithClaims`)
+  using `set_config($1, $2, true)` for parameter-bound JWT-sub
+  injection (belt-and-suspenders against any future regression);
+  first authed read endpoint `GET /api/kitchen/ingredients` with
+  the contract §5.5 envelope, ADR-0009-correct filter, and
+  fail-closed if the auth middleware didn't attach a UUID. 32
+  tests pass + 2 RLS integration tests skip with a documented
+  one-line enabling command (`SUPABASE_DB_TEST_URL=...`). Added
+  4 dependencies (golang-jwt/jwt/v5, MicahParks/keyfunc/v3,
+  google/uuid, jackc/pgx/v5 — all MIT/Apache-2.0/BSD-3, gosec
+  license scan clean).
+
+- **track-ios-week2** (3 commits, merged at `e990276`) — Domain
+  library landed every contract §4.2 column as a typed Swift
+  property (UUID/Date/Decimal/enums + 8 nested JSONB sub-document
+  types, recursive `JSONValue` for the open-keyed `attributes`
+  map). API library shipped a public `actor APIClient` with an
+  `AuthTokenProvider = @Sendable () async -> String?` (Swift 6
+  strict-concurrency clean), typed `APIError` covering every
+  contract §3.5 path, and a `URLProtocol`-stubbed test suite
+  (lock-protected synchronous because URLProtocolClient isn't
+  Sendable under strict concurrency). Plan tab now renders a
+  real ingredients list via `@MainActor @Observable
+  IngredientsModel` driving an idle/loading/loaded/failed state
+  machine. **Compile-time guarantee verified**:
+  `grep -r "import SwiftUI" SousChefKit/Sources` is empty.
+
+**Conductor W2 audit finding (1 item, fixed at `f5fbd00`):**
+`backend/internal/store/store.go`'s `WithClaims` docstring
+promised that on a fn-error-then-rollback-failure path the two
+errors would be joined via `errors.Join`. The implementation
+silenced the rollback error. dc-00 mismatch. Fix: named return
+value `err` lets the defer attach via `errors.Join`. Renamed
+the begin-error local from `err` to `beginErr` so the defer's
+named-return assignment is unambiguous.
+
+**Worktree isolation worked.** Zero race events, zero
+cross-track contamination, zero rebases needed. The
+backend↔Conductor merge conflict on apierror.go's header was a
+legitimate parallel-edit conflict, not a tooling artifact — both
+of us correctly tightened the same sentence.
+
+Phase 4 Week 2 fully closed. Cumulative state:
+- Sous-Chef-Claude2 main at `f5fbd00` (17 commits beyond
+  initial; ~9000 LOC of real code across three tracks).
+- Backend boots a Go binary that loads config, verifies JWTs,
+  and serves a contract-§5.5-correct ingredients endpoint.
+- Data has a declarative schema, full RLS, 6 pgTAP suites, and
+  a real CFO seed runnable against a local Supabase stack.
+- iOS has a SwiftUI app that builds clean under Swift 6 strict
+  concurrency and renders the Plan tab against a real API
+  client (against `http://127.0.0.1:8080` for dev).
+
+The next gates that unblock Week 3 are **Dave-actions** —
+Apple Developer enrollment + Supabase project provisioning +
+AWS staging ALB confirmation — per `plan/integration.md` §3.2.
+Until those land, Week 3 work (Auth real-wiring, AI surface,
+SSE chat) is partially blocked.
+
 ## 2026-05-24 · Phase 4 — Sous-chef Week 1 foundations ✅
 
 DevCore decided at the Phase 3→4 boundary to **skip the Go Engine for
