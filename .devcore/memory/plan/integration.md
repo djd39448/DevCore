@@ -100,18 +100,32 @@ No conflict; documented for traceability.
 
 ### 2.2 Cookbook save → image generation (ADR-0004)
 
-- **iOS** posts to `POST /api/kitchen/cookbook`, shows a spinner state
-  ("generating image…"), disables the save button until the response
-  arrives (2–10 seconds). On error, surfaces an alert; the recipe row
-  is **not** saved if image gen fails (contract §5.6).
-- **Backend** generates the image inline before returning the new row;
-  on image-gen failure, returns 502 and **does not** insert the
-  cookbook row.
+This section was rewritten on 2026-05-25 to match the contract.
+The original wording said the recipe row was rolled back if image
+generation failed; the contract (§8.4) actually persists the row
+with `image_url` left null and returns 503. Reviewer-pass 0001
+flagged the divergence. **Contract wins**; this doc now mirrors it.
+
+- **iOS** posts to `POST /api/kitchen/cookbook`, shows a spinner
+  state ("generating image…"), and disables the save button until
+  the response arrives (2–10 seconds). On a 503 response (Storage
+  upload failure per contract §8.4), the recipe **is** saved — the
+  row persists with `image_url` null. The UI surfaces a "save
+  succeeded; image will retry" affordance and exposes a manual
+  retry via `POST /api/kitchen/cookbook/:id/regenerate-image`. The
+  user-typed content (title, recipe markdown) is never lost because
+  OpenAI hiccuped.
+- **Backend** writes the cookbook row first, then attempts the image
+  generation + Storage upload. On image-gen / upload failure, returns
+  503 with the contract §3.5 `internal_error` envelope **without
+  rolling back** the row (per contract §8.4). The row's `image_url`
+  stays null; a later regenerate-image call fills it in.
 - **Data** owns the `cookbook-images` Storage bucket and the
   `BEFORE DELETE` trigger on `cookbook_recipes` that evicts the
   storage object in the same transaction.
 
-No conflict; confirmed in all three plans.
+No remaining conflict — contract, integration doc, and all three
+track plans now agree.
 
 ### 2.3 SSE wire format (contract §6)
 

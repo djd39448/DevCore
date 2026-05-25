@@ -688,8 +688,8 @@ until the prior phase's acceptance is met.
 | Artifact | Where this track touches it |
 |---|---|
 | The eleven tables in contract §4 (`food_items`, `meal_plans`, `meal_plan_days`, `cookbook_recipes`, `shopping_lists`, `shopping_list_items`, `kitchen_conversations`, `kitchen_messages`). | `internal/store` SQL queries reference these by name. The handlers never query through the Supabase REST API — direct `pgx` against the same Postgres instance. |
-| RLS policies on every table. | This track authenticates each connection as the bearer-token user. Per `dc-04` the policies use `(select auth.uid())`; **the Go service does not set `auth.uid()` itself** — it uses a direct service connection and applies the user filter explicitly in every query. The contract §2 trust model is "JWT-verified `user_id` is appended to every WHERE clause". The data track's RLS is a defense-in-depth backstop, not the Go service's primary scoping. **This is a deliberate split — RLS still gates the iOS-direct-PostgREST path if it ever exists; for the Go API path, application-level filtering is the gate.** |
-| Storage bucket `cookbook-images` with RLS on `storage.objects`. | This track uploads via the Storage REST API with the service-role key (allowed past RLS by design — the per-user-path scoping is enforced in this track's URL construction at `{user_id}/{recipe_id}.png`). |
+| RLS policies on every table. | **RLS is the source of truth per ADR-0011** (this section was rewritten on 2026-05-25 after Reviewer-pass 0001 flagged it as stale). The Go service connects as the **`authenticated`** Postgres role (never service-role for DB access) and executes `SET LOCAL request.jwt.claim.sub = '<user_id>'` at the start of every transactional handler. The data track's `(select auth.uid())` policies then enforce per-row filtering inside Postgres. Application-level `WHERE user_id = $1` is **not** the gate — RLS is. A Go bug cannot leak rows because the database refuses the query. See `internal/store.WithClaims` (new task per ADR-0011 amendment). |
+| Storage bucket `cookbook-images` with RLS on `storage.objects`. | This track uploads via the Storage REST API with the service-role key (allowed past RLS by design — the per-user-path scoping is enforced in this track's URL construction at `{user_id}/{recipe_id}.png`). PostgREST is disabled at the project level (Conductor decision at the `track_plan` gate), so the iOS-direct-DB path the prior wording referenced does not exist; RLS on the `cookbook-images` Storage bucket remains load-bearing because the service-role key only bypasses RLS for the **storage** REST API path, not for Postgres queries. |
 | Storage delete trigger on `cookbook_recipes` row delete. | This track issues plain `DELETE FROM cookbook_recipes`; the trigger handles the object cleanup. |
 | `updated_at` triggers. | This track issues plain `UPDATE`; the trigger does the timestamp. |
 | `uuidv7()` PK default. | This track does **not** generate UUIDs client-side; it lets the DB do it and reads `RETURNING id`. |
@@ -865,17 +865,15 @@ costs reproducibility wins behavior stability across the upstream's
 silent improvements. **Recommendation:** pin a snapshot in
 production; allow override in staging for testing.
 
-**Q2 — Connection identity for Supabase Postgres.** The Go service
-connects directly to Postgres with a single service-role DSN, then
-applies `user_id` filtering at the application layer (see §6.1).
-The data track's RLS policies are written against `auth.uid()` from
-a JWT. **Question:** should the Go service use the
-`postgrest`-equivalent path (sending the user's JWT in
-`pgx`-extensible headers, having Postgres derive `auth.uid()` from
-it) so the RLS gate applies to API traffic too? **Default plan:**
-service-role connection + app-level filtering; document that RLS is
-the iOS-direct-PostgREST gate only. This affects how the data track
-writes its RLS policies. **Needs Conductor decision.**
+**Q2 — Connection identity for Supabase Postgres.** *Resolved at
+the `track_plan` gate as ADR-0011 — JWT-aware connection, RLS is
+load-bearing.* The Go service connects as the **`authenticated`**
+Postgres role and executes `SET LOCAL request.jwt.claim.sub =
+'<user_id>'` at the start of every transactional handler. Data
+track's `(select auth.uid())` policies are the gate. A new task,
+"Implement `internal/store.WithClaims` helper; test against a
+Supabase local stack with an RLS-protected table", lands in the §5
+Phase A task tree as A6 (or wherever the Builder slots it).
 
 **Q3 — SSE heartbeat interval and ALB idle timeout.** R4 above
 suggests 20s heartbeat + 600s ALB idle. **Question:** confirm the
