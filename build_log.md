@@ -448,6 +448,38 @@ AWS staging ALB confirmation — per `plan/integration.md` §3.2.
 Until those land, Week 3 work (Auth real-wiring, AI surface,
 SSE chat) is partially blocked.
 
+## 2026-05-25 · Between-week pivot — AWS deployment to Elastic Beanstalk
+
+Dave pivoted the backend's AWS deployment target from **ECS Fargate**
+(the backend Builder's track-plan §3.3 choice) to **Elastic Beanstalk
+Docker, load-balanced with ALB, us-east-1**. Captured as **ADR-0013**.
+
+The pivot does not change any code — the Dockerfile, Makefile, distroless
+image, and SSE design all carry over because Beanstalk's "Docker on
+Amazon Linux 2023" platform runs the same image behind an ALB. The
+change is purely how the container is operated.
+
+What lands in the docs:
+  - `decisions/0013-aws-deployment.md` — full ADR with Context (Fargate
+    vs EB trade-off table), Decision (Docker platform, load-balanced
+    with ALB, us-east-1, 600s idle timeout for SSE, three environments
+    under one EB application), Status (Accepted), Consequences.
+  - `plan/track-backend.md` — NOTE 2 block added pointing at ADR-0013.
+    §3.3 amended in place; the rest of the plan stands. Phase L task
+    list gains two items (`eb init` and `.ebextensions/01-alb-idle-
+    timeout.config`).
+  - `plan/integration.md` §3.2 Dave-action "confirm AWS ALB idle-timeout
+    600s" is superseded — the value is now version-controlled in
+    `.ebextensions/`. The new equivalent Dave-action is "create the EB
+    application + three environments in us-east-1", deferred to Phase L.
+  - `MEMORY.md` updated to list ADR-0013.
+
+No code in `Sous-Chef-Claude2/backend/` changes today. The
+`.elasticbeanstalk/config.yml` and `.ebextensions/` files land in
+Phase L when the backend is ready for its first deploy — pre-writing
+them now would be Phase-L scaffolding without a real environment to
+validate against (dc-00: no dark code).
+
 ## 2026-05-24 · Phase 4 — Sous-chef Week 1 foundations ✅
 
 DevCore decided at the Phase 3→4 boundary to **skip the Go Engine for

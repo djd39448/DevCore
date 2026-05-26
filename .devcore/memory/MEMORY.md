@@ -37,6 +37,7 @@ This file is the map. Read it first; retrieve only what a task needs.
 | `plan/integration.md` | Cross-track integration synthesis — touchpoints, gate outcomes, 18 open questions (accepted) |
 | `decisions/0011-jwt-aware-connection.md` | Backend connects JWT-aware; RLS is the source of truth (accepted) |
 | `decisions/0012-bundle-id.md` | iOS bundle id is `com.djd39448.souschef` (accepted) |
+| `decisions/0013-aws-deployment.md` | AWS: Elastic Beanstalk Docker, load-balanced ALB, us-east-1 (accepted; supersedes track-backend §3.3 Fargate choice) |
 | `reviews/0001-phase4-week1.md` | Reviewer pass on Phase 4 Week 1 — all three tracks approved with findings |
 
 ## Active workload

@@ -15,13 +15,26 @@ iOS port. This plan is **the** plan the backend Builder executes in Phase 4.
 The contract (`memory/contract/contract.md`) is the spec; this document is
 the route from contract to running service.
 
-> **NOTE (post-`track_plan`-gate):** §3 *Architecture* in this plan defaulted
+> **NOTE 1 (post-`track_plan`-gate):** §3 *Architecture* in this plan defaulted
 > to a service-role connection with app-level `WHERE user_id = $1` filtering.
 > **That default is overridden by ADR-0011 — JWT-aware connection, RLS
 > enforced.** The Builder reads ADR-0011 before Phase 4 implementation and
 > incorporates its task addendum (one new task: `internal/store.WithClaims`
 > helper) into this plan's §5 task tree. The rest of the plan stands.
 > See `memory/plan/integration.md` §1.1 for the cross-track reasoning.
+>
+> **NOTE 2 (mid-Phase-4 pivot, 2026-05-25):** §3.3 *AWS target* in this plan
+> chose **ECS Fargate**. **That choice is overridden by ADR-0013 — Elastic
+> Beanstalk Docker, load-balanced with ALB, us-east-1.** The Dockerfile,
+> Makefile, distroless image, and SSE design all carry over unchanged
+> (Beanstalk's Docker-on-AL2023 platform runs the same image behind an ALB).
+> The Phase L task list gains two items: `eb init` against the
+> `sous-chef-api` application in us-east-1 (commit `.elasticbeanstalk/
+> config.yml`), and a `.ebextensions/01-alb-idle-timeout.config` setting
+> the ALB idle timeout to 600s for SSE. The Dave-action in
+> `integration.md` §3.2 "confirm AWS ALB idle-timeout 600s" is superseded
+> by this ADR (the value is now version-controlled). The rest of the plan
+> stands.
 
 ---
 
